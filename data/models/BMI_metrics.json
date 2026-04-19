@@ -1,0 +1,31 @@
+{
+    "logistic_regression": {
+        "accuracy": 0.503968253968254,
+        "precision": 0.3229166666666667,
+        "recall": 0.34065934065934067,
+        "f1": 0.3315508021390374,
+        "auc": 0.4493891201965736,
+        "model": "logistic_regression"
+    },
+    "random_forest": {
+        "accuracy": 0.49603174603174605,
+        "precision": 0.34210526315789475,
+        "recall": 0.42857142857142855,
+        "f1": 0.3804878048780488,
+        "auc": 0.46358610333765604,
+        "model": "random_forest"
+    },
+    "train_rows": 1004,
+    "test_rows": 252,
+    "feature_columns": [
+        "net_sentiment",
+        "bullish_share",
+        "sentiment_change",
+        "message_count_5m",
+        "abnormal_density",
+        "one_min_return",
+        "trailing_volatility",
+        "volume_zscore_30m"
+    ],
+    "target_column": "direction_5m"
+}

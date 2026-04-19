@@ -5,6 +5,8 @@ import time
 import random
 from pathlib import Path
 from typing import Optional, Any
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from curl_cffi import requests
 
@@ -17,6 +19,44 @@ DEFAULT_HEADERS = {
         "Chrome/136.0.0.0 Safari/537.36"
     ),
 }
+
+
+EASTERN_TZ = ZoneInfo("America/New_York")
+
+
+def convert_to_eastern_time(timestamp: str) -> str:
+    """
+    Convert a StockTwits timestamp to America/New_York time.
+
+    StockTwits usually returns timestamps in UTC.
+    This function stores them in Eastern Time with timezone offset.
+
+    Example:
+        Input:  2026-04-19T14:35:00Z
+        Output: 2026-04-19T10:35:00-04:00
+    """
+    if not timestamp:
+        return ""
+
+    try:
+        cleaned = timestamp.strip()
+
+        # Handle common UTC format ending in Z
+        if cleaned.endswith("Z"):
+            cleaned = cleaned.replace("Z", "+00:00")
+
+        dt = datetime.fromisoformat(cleaned)
+
+        # If timestamp has no timezone, assume UTC
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        eastern_dt = dt.astimezone(EASTERN_TZ)
+        return eastern_dt.isoformat()
+
+    except Exception:
+        # If conversion fails, return the original timestamp
+        return timestamp
 
 
 def get_symbol_stream(
@@ -76,17 +116,21 @@ def get_symbol_stream(
 def normalize_message(msg: dict[str, Any]) -> dict[str, Any]:
     """
     Convert a raw StockTwits API message into the stored schema.
+
+    The timestamp is converted to America/New_York time before saving.
     """
     user = msg.get("user", {}).get("username", "Unknown")
     body = msg.get("body", "")
     created_at = msg.get("created_at", "")
+    eastern_time = convert_to_eastern_time(created_at)
+
     sentiment = msg.get("entities", {}).get("sentiment", {})
     sentiment_val = sentiment.get("basic", "null") if sentiment else "null"
 
     return {
         "id": msg["id"],
         "author": user,
-        "time": created_at,
+        "time": eastern_time,
         "post": body,
         "sentiment": sentiment_val,
     }
@@ -121,6 +165,7 @@ def load_existing_data(
             max_id = max(ids)
 
         print(f"Loaded {len(existing_data)} msgs. Range: {min_id} (old) <-> {max_id} (new)")
+
     except Exception as e:
         print(f"Error loading file: {e}")
 
@@ -142,7 +187,9 @@ def save_data(
     try:
         with open(output_filename, "w", encoding="utf-8") as f:
             json.dump(existing_data, f, indent=4, ensure_ascii=False)
+
         print(f"Saved total {len(existing_data)} messages. (Newest: {max_id}, Oldest: {min_id})")
+
     except Exception as e:
         print(f"Save error: {e}")
 
@@ -170,6 +217,7 @@ def run_scraper(
     print(f"Starting Hybrid Scraper for {symbol} (Live + Backfill).")
     print(f"Using impersonation profile: {impersonate}")
     print(f"Output file: {output_filename}")
+    print("Saving message timestamps in America/New_York time.")
 
     backfill_active = True
     cycle = 0
@@ -193,8 +241,10 @@ def run_scraper(
 
             if data_live:
                 msgs = data_live.get("messages", [])
+
                 for msg in msgs:
                     msg_id = msg.get("id")
+
                     if msg_id is None or msg_id in existing_ids:
                         continue
 
@@ -227,12 +277,14 @@ def run_scraper(
 
                     if data_hist:
                         msgs = data_hist.get("messages", [])
+
                         if not msgs:
                             print("Backfill: End of history reached.")
                             backfill_active = False
                         else:
                             for msg in msgs:
                                 msg_id = msg.get("id")
+
                                 if msg_id is None or msg_id in existing_ids:
                                     continue
 
@@ -262,6 +314,7 @@ def run_scraper(
 
     except KeyboardInterrupt:
         print("\nStopped by user.")
+
     except Exception as e:
         print(f"Critical error: {e}")
 
@@ -272,36 +325,47 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Scrape StockTwits history + live updates using curl_cffi impersonation."
     )
-    parser.add_argument("symbol", type=str, help="Ticker symbol, e.g. AAPL")
+
+    parser.add_argument(
+        "symbol",
+        type=str,
+        help="Ticker symbol, e.g. AAPL",
+    )
+
     parser.add_argument(
         "--output",
         type=str,
         default=None,
         help="Output JSON filename",
     )
+
     parser.add_argument(
         "--impersonate",
         type=str,
         default="chrome",
         help='Browser fingerprint target, e.g. "chrome", "safari", "edge"',
     )
+
     parser.add_argument(
         "--timeout",
         type=int,
         default=30,
         help="Request timeout in seconds",
     )
+
     parser.add_argument(
         "--max-cycles",
         type=int,
         default=None,
         help="Optional number of loop cycles before exiting",
     )
+
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+
     run_scraper(
         symbol=args.symbol,
         output_filename=args.output,
