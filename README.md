@@ -4,8 +4,6 @@
 
 This project investigates whether unstructured financial sentiment from StockTwits can help predict short-term stock price direction. The core idea is to scrape StockTwits posts for a given ticker, transform the posts into rolling sentiment and message-density features, merge those features with intraday market data, and train machine learning models to predict whether the stock price will move upward over the next five minutes.
 
-This project was built for DS 340W at Penn State.
-
 ---
 
 ## Project Overview
